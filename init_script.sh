@@ -9,3 +9,5 @@ wget https://raw.githubusercontent.com/internet-scholar/internet_scholar/master/
 wget https://raw.githubusercontent.com/internet-scholar/internet_scholar/master/internet_scholar.py
 pip3 install --trusted-host pypi.python.org -r /home/ubuntu/requirements.txt
 pip3 install --trusted-host pypi.python.org -r /home/ubuntu/requirements2.txt
+mkdir /home/ubuntu/.aws
+printf "[default]\\nregion=us-west-2" > /home/ubuntu/.aws/config

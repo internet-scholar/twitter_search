@@ -123,7 +123,7 @@ class TwitterSearch:
         self.s3_admin = s3_admin
         self.s3_data = s3_data
 
-    TOLERANCE = 0
+    TOLERANCE = 5
 
     def update_table_youtube_twitter_addition(self):
         athena_db = AthenaDatabase(database=self.athena_data, s3_output=self.s3_admin)
