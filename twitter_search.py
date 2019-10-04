@@ -57,6 +57,14 @@ where
   creation_date = cast(current_date - interval '1' day as varchar)
 """
 
+# NEW_VIDEOS_TODAY = """
+# select id
+# from
+#   youtube_video_snippet
+# where
+#   creation_date = cast(current_date - interval '1' day as varchar)
+# """
+
 NEW_VIDEOS_TODAY = """
 select distinct
   url_extract_parameter(validated_url, 'v') as id
@@ -351,7 +359,7 @@ def main():
                                        s3_admin=config['aws']['s3-admin'],
                                        s3_data=config['aws']['s3-data'])
         twitter_search.collect_ancillary_tweets(filter_name=config['parameter']['filter'], method=args.method)
-            #twitter_search.update_table_youtube_twitter_addition()
+        #twitter_search.update_table_youtube_twitter_addition()
     finally:
         logger.save_to_s3()
         logger.recreate_athena_table()
