@@ -292,7 +292,7 @@ class TwitterSearch:
             cursor_new_users = tweet_from_video_id_db.cursor()
             cursor_new_users.execute("select distinct screen_name from tweets")
             for new_user in cursor_new_users:
-                database.execute("insert or ignore into twitter_user (screen_name) values ?",
+                database.execute("insert or ignore into twitter_user (screen_name) values (?)",
                                  (new_user['screen_name'],))
             database.commit()
             tweet_from_video_id_db.close()
