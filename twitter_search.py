@@ -158,6 +158,10 @@ class TwitterSearch:
                 self.twint_resilient(filename=filename, query=query, num_attempts=num_attempts+1)
 
     def collect_user_tweets_tweepy(self, filter_terms, new_videos_yesterday_file, num_attempts=0):
+        database_file = Path(Path(__file__).parent, 'tmp', 'twitter_search.sqlite')
+        Path(database_file).parent.mkdir(parents=True, exist_ok=True)
+        database = sqlite3.connect(str(database_file))
+        database.row_factory = sqlite3.Row
         try:
             auth = tweepy.OAuthHandler(consumer_key=self.credentials['consumer_key'],
                                        consumer_secret=self.credentials['consumer_secret'])
@@ -165,10 +169,6 @@ class TwitterSearch:
                                   secret=self.credentials['access_token_secret'])
             api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
-            database_file = Path(Path(__file__).parent, 'tmp', 'twitter_search.sqlite')
-            Path(database_file).parent.mkdir(parents=True, exist_ok=True)
-            database = sqlite3.connect(str(database_file))
-            database.row_factory = sqlite3.Row
 
             database.execute(CREATE_TABLE_YOUTUBE_VIDEO_ID)
             database.execute(CREATE_TABLE_TWEET_FROM_VIDEO_ID)
@@ -233,16 +233,18 @@ class TwitterSearch:
             if num_attempts >= self.TOLERANCE:
                 raise
             else:
-                self.collect_ancillary_tweets(filter_terms=filter_terms, num_attempts=num_attempts + 1)
+                self.collect_user_tweets_tweepy(filter_terms=filter_terms,
+                                                new_videos_yesterday_file=new_videos_yesterday_file,
+                                                num_attempts=num_attempts + 1)
         finally:
             database.close()
 
     def collect_user_tweets_twint(self, filter_terms, new_videos_yesterday_file, num_attempts=0):
+        database_file = Path(Path(__file__).parent, 'tmp', 'twitter_search.sqlite')
+        Path(database_file).parent.mkdir(parents=True, exist_ok=True)
+        database = sqlite3.connect(str(database_file))
+        database.row_factory = sqlite3.Row
         try:
-            database_file = Path(Path(__file__).parent, 'tmp', 'twitter_search.sqlite')
-            Path(database_file).parent.mkdir(parents=True, exist_ok=True)
-            database = sqlite3.connect(str(database_file))
-            database.row_factory = sqlite3.Row
 
             tweet_from_video_id = Path(Path(__file__).parent, 'tmp', 'tweet_from_video_id.sqlite')
             tweet_from_screen_name = Path(Path(__file__).parent, 'tmp', 'tweet_from_screen_name.sqlite')
@@ -310,7 +312,9 @@ class TwitterSearch:
             if num_attempts >= self.TOLERANCE:
                 raise
             else:
-                self.collect_ancillary_tweets(filter_terms=filter_terms, num_attempts=num_attempts + 1)
+                self.collect_user_tweets_twint(filter_terms=filter_terms,
+                                               new_videos_yesterday_file=new_videos_yesterday_file,
+                                               num_attempts=num_attempts + 1)
         finally:
             database.close()
 
@@ -324,7 +328,8 @@ class TwitterSearch:
         new_videos_yesterday_file = athena_db.query_athena_and_download(query_string=NEW_VIDEOS_YESTERDAY,
                                                                         filename=new_videos_yesterday)
         if method == 'twint':
-            self.collect_user_tweets_twint(filter_terms=filter_terms, new_videos_yesterday_file=new_videos_yesterday_file)
+            self.collect_user_tweets_twint(filter_terms=filter_terms,
+                                           new_videos_yesterday_file=new_videos_yesterday_file)
         else:
             self.collect_user_tweets_tweepy(filter_terms=filter_terms,
                                             new_videos_yesterday_file=new_videos_yesterday_file)
