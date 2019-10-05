@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS youtube_video_id
 CREATE_TABLE_USER = """
 create table if not exists twitter_user
 (
-    screen_name text,
+    screen_name text primary key,
     processed integer default 0,
     created_at timestamp default current_timestamp 
 )
