@@ -5,7 +5,7 @@ import itertools
 import csv
 import gzip
 import boto3
-from datetime import datetime
+from datetime import datetime, timedelta
 import twint
 import json
 import tweepy
@@ -152,10 +152,11 @@ class TwitterSearch:
 
         athena_db.query_athena_and_wait(query_string="MSCK REPAIR TABLE youtube_twitter_addition")
 
-    def twint_resilient(self, filename, query, num_attempts=0):
+    def twint_resilient(self, filename, query, since, num_attempts=0):
         try:
             c = twint.Config()
             c.Search = query
+            c.Since = since
             c.Database = str(filename)
             twint.run.Search(c)
             num_attempts = 0
@@ -163,7 +164,10 @@ class TwitterSearch:
             if num_attempts >= 5:
                 raise
             else:
-                self.twint_resilient(filename=filename, query=query, num_attempts=num_attempts+1)
+                self.twint_resilient(filename=filename,
+                                     query=query,
+                                     since=since,
+                                     num_attempts=num_attempts+1)
 
     def collect_user_tweets_tweepy(self, filter_terms, new_videos_yesterday_file, num_attempts=0):
         database_file = Path(Path(__file__).parent, 'tmp', 'twitter_search.sqlite')
@@ -283,7 +287,9 @@ class TwitterSearch:
                                                         filter=" ".join(
                                                             ['-' + x.strip() for x in filter_terms.split(',')]))
                     print(str(datetime.utcnow()) + ' ' + query)
-                    self.twint_resilient(filename=tweet_from_video_id,query=query)
+                    self.twint_resilient(filename=tweet_from_video_id,
+                                         query=query,
+                                         since=str((datetime.utcnow() - timedelta(days=7)).date()))
                     database.commit()
                     num_attempts = 0
 
@@ -313,7 +319,9 @@ class TwitterSearch:
                         query=query[:-4],
                         filter=" ".join(['-' + x.strip() for x in filter_terms.split(',')]))
                     print(str(datetime.utcnow()) + ' ' + query)
-                    self.twint_resilient(filename=tweet_from_screen_name,query=query)
+                    self.twint_resilient(filename=tweet_from_screen_name,
+                                         query=query,
+                                         since=str((datetime.utcnow() - timedelta(days=7)).date()))
                     database.commit()
                     num_attempts = 0
         except:
