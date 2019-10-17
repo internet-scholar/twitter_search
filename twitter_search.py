@@ -59,7 +59,7 @@ order by screen_name
 
 NEW_VIDEOS_YESTERDAY = """
 select
-  distinct id.videoId
+  distinct id.videoId as id
 from
   youtube_related_video
 where
