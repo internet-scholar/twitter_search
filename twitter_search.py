@@ -1,5 +1,5 @@
 import argparse
-from internet_scholar import AthenaLogger, read_dict_from_s3_url, AthenaDatabase
+from internet_scholar import AthenaLogger, read_dict_from_s3_url, AthenaDatabase, compress
 from pathlib import Path
 import itertools
 import csv
@@ -49,12 +49,25 @@ from tweets
 order by screen_name
 """
 
+# NEW_VIDEOS_YESTERDAY = """
+# select id
+# from
+#   youtube_twitter_addition
+# where
+#   creation_date = cast(current_date - interval '1' day as varchar)
+# """
+
 NEW_VIDEOS_YESTERDAY = """
-select id
+select
+  distinct id.videoId
 from
-  youtube_twitter_addition
+  youtube_related_video
 where
   creation_date = cast(current_date - interval '1' day as varchar)
+"""
+
+YESTERDAY = """
+select cast(current_date - interval '1' day as varchar) as yesterday;
 """
 
 # NEW_VIDEOS_TODAY = """
@@ -123,6 +136,418 @@ create table if not exists twitter_user
 )
 """
 
+STRUCTURE_TWINT_ATHENA = """
+created_at timestamp,
+id bigint,
+id_str string,
+conversation_id string,
+tweet string,
+date DATE,
+time string,
+timezone string,
+place string,
+replies_count bigint,
+likes_count bigint,
+retweets_count bigint,
+user_id bigint,
+user_id_str string,
+screen_name string,
+name string,
+link string,
+mentions array<string>,
+hashtags array<string>,
+cashtags array<string>,
+urls array<string>,
+photos array<string>,
+quote_url string,
+video int,
+geo string,
+near string,
+source string,
+time_update timestamp
+"""
+
+ATHENA_CREATE_TWINT_VIDEO_ID = """
+CREATE EXTERNAL TABLE IF NOT EXISTS twint_video_id (
+{structure}
+)
+PARTITIONED BY (reference_date String)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+WITH SERDEPROPERTIES (
+  'serialization.format' = '1',
+  'ignore.malformed.json' = 'true'
+) LOCATION 's3://{s3_bucket}/twint_video_id/'
+TBLPROPERTIES ('has_encrypted_data'='false');
+"""
+
+ATHENA_CREATE_TWINT_SCREEN_NAME = """
+CREATE EXTERNAL TABLE IF NOT EXISTS twint_screen_name (
+{structure}
+)
+PARTITIONED BY (reference_date String)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+WITH SERDEPROPERTIES (
+  'serialization.format' = '1',
+  'ignore.malformed.json' = 'true'
+) LOCATION 's3://{s3_bucket}/twint_screen_name/'
+TBLPROPERTIES ('has_encrypted_data'='false');
+"""
+
+STRUCTURE_TWEEPY_ATHENA = """
+created_at timestamp,
+id bigint,
+id_str string,
+text string,
+source string,
+truncated boolean,
+in_reply_to_status_id bigint,
+in_reply_to_status_id_str string,
+in_reply_to_user_id bigint,
+in_reply_to_user_id_str string,
+in_reply_to_screen_name string,
+quoted_status_id bigint,
+quoted_status_id_str string,
+is_quote_status boolean,
+retweet_count int,
+favorite_count int,
+favorited boolean,
+retweeted boolean,
+possibly_sensitive boolean,
+filter_level string,
+lang string,
+user struct<
+    id: bigint,
+    id_str: string,
+    name: string,
+    screen_name: string,
+    location: string,
+    url: string,
+    description: string,
+    protected: boolean,
+    verified: boolean,
+    followers_count: int,
+    friends_count: int,
+    listed_count: int,
+    favourites_count: int,
+    statuses_count: int,
+    created_at: timestamp,
+    profile_banner_url: string,
+    profile_image_url_https: string,
+    default_profile: boolean,
+    default_profile_image: boolean,
+    withheld_in_countries: array<string>,
+    withheld_scope: string
+>,
+coordinates struct<
+    coordinates: array<float>,
+    type: string
+>,
+place struct<
+    id: string,
+    url: string,
+    place_type: string,
+    name: string,
+    full_name: string,
+    country_code: string,
+    country: string,
+    bounding_box: struct<
+        coordinates: array<array<array<float>>>,
+        type: string
+    >
+>,
+entities struct<
+    hashtags: array<
+        struct<
+            indices: array<smallint>,
+            text: string
+        >
+    >,
+    urls: array<
+        struct<
+            display_url: string,
+            expanded_url: string,
+            indices: array<smallint>,
+            url: string
+        >
+    >,
+    user_mentions: array<
+        struct<
+            id: bigint,
+            id_str: string,
+            indices: array<smallint>,
+            name: string,
+            screen_name: string
+        >
+    >,
+    symbols: array<
+        struct<
+            indices: array<smallint>,
+            text: string
+        >
+    >,
+    media: array<
+        struct<
+            display_url: string,
+            expanded_url: string,
+            id: bigint,
+            id_str: string,
+            indices: array<smallint>,
+            media_url: string,
+            media_url_https: string,
+            source_status_id: bigint,
+            source_status_id_str: string,
+            type: string,
+            url: string
+        >
+    >
+>,
+quoted_status struct<
+    created_at: timestamp,
+    id: bigint,
+    id_str: string,
+    text: string,
+    source: string,
+    truncated: boolean,
+    in_reply_to_status_id: bigint,
+    in_reply_to_status_id_str: string,
+    in_reply_to_user_id: bigint,
+    in_reply_to_user_id_str: string,
+    in_reply_to_screen_name: string,
+    quoted_status_id: bigint,
+    quoted_status_id_str: string,
+    is_quote_status: boolean,
+    retweet_count: int,
+    favorite_count: int,
+    favorited: boolean,
+    retweeted: boolean,
+    possibly_sensitive: boolean,
+    filter_level: string,
+    lang: string,
+    user: struct<
+        id: bigint,
+        id_str: string,
+        name: string,
+        screen_name: string,
+        location: string,
+        url: string,
+        description: string,
+        protected: boolean,
+        verified: boolean,
+        followers_count: int,
+        friends_count: int,
+        listed_count: int,
+        favourites_count: int,
+        statuses_count: int,
+        created_at: timestamp,
+        profile_banner_url: string,
+        profile_image_url_https: string,
+        default_profile: boolean,
+        default_profile_image: boolean,
+        withheld_in_countries: array<string>,
+        withheld_scope: string
+    >,
+    coordinates: struct<
+        coordinates: array<float>,
+        type: string
+    >,
+    place: struct<
+        id: string,
+        url: string,
+        place_type: string,
+        name: string,
+        full_name: string,
+        country_code: string,
+        country: string,
+        bounding_box: struct<
+            coordinates: array<array<array<float>>>,
+            type: string
+        >
+    >,
+    entities: struct<
+        hashtags: array<
+            struct<
+                indices: array<smallint>,
+                text: string
+            >
+        >,
+        urls: array<
+            struct<
+                display_url: string,
+                expanded_url: string,
+                indices: array<smallint>,
+                url: string
+            >
+        >,
+        user_mentions: array<
+            struct<
+                id: bigint,
+                id_str: string,
+                indices: array<smallint>,
+                name: string,
+                screen_name: string
+            >
+        >,
+        symbols: array<
+            struct<
+                indices: array<smallint>,
+                text: string
+            >
+        >,
+        media: array<
+            struct<
+                display_url: string,
+                expanded_url: string,
+                id: bigint,
+                id_str: string,
+                indices: array<smallint>,
+                media_url: string,
+                media_url_https: string,
+                source_status_id: bigint,
+                source_status_id_str: string,
+                type: string,
+                url: string
+            >
+        >
+    >
+>,
+retweeted_status struct<
+    created_at: timestamp,
+    id: bigint,
+    id_str: string,
+    text: string,
+    source: string,
+    truncated: boolean,
+    in_reply_to_status_id: bigint,
+    in_reply_to_status_id_str: string,
+    in_reply_to_user_id: bigint,
+    in_reply_to_user_id_str: string,
+    in_reply_to_screen_name: string,
+    quoted_status_id: bigint,
+    quoted_status_id_str: string,
+    is_quote_status: boolean,
+    retweet_count: int,
+    favorite_count: int,
+    favorited: boolean,
+    retweeted: boolean,
+    possibly_sensitive: boolean,
+    filter_level: string,
+    lang: string,
+    user: struct<
+        id: bigint,
+        id_str: string,
+        name: string,
+        screen_name: string,
+        location: string,
+        url: string,
+        description: string,
+        protected: boolean,
+        verified: boolean,
+        followers_count: int,
+        friends_count: int,
+        listed_count: int,
+        favourites_count: int,
+        statuses_count: int,
+        created_at: timestamp,
+        profile_banner_url: string,
+        profile_image_url_https: string,
+        default_profile: boolean,
+        default_profile_image: boolean,
+        withheld_in_countries: array<string>,
+        withheld_scope: string
+    >,
+    coordinates: struct<
+        coordinates: array<float>,
+        type: string
+    >,
+    place: struct<
+        id: string,
+        url: string,
+        place_type: string,
+        name: string,
+        full_name: string,
+        country_code: string,
+        country: string,
+        bounding_box: struct<
+            coordinates: array<array<array<float>>>,
+            type: string
+        >
+    >,
+    entities: struct<
+        hashtags: array<
+            struct<
+                indices: array<smallint>,
+                text: string
+            >
+        >,
+        urls: array<
+            struct<
+                display_url: string,
+                expanded_url: string,
+                indices: array<smallint>,
+                url: string
+            >
+        >,
+        user_mentions: array<
+            struct<
+                id: bigint,
+                id_str: string,
+                indices: array<smallint>,
+                name: string,
+                screen_name: string
+            >
+        >,
+        symbols: array<
+            struct<
+                indices: array<smallint>,
+                text: string
+            >
+        >,
+        media: array<
+            struct<
+                display_url: string,
+                expanded_url: string,
+                id: bigint,
+                id_str: string,
+                indices: array<smallint>,
+                media_url: string,
+                media_url_https: string,
+                source_status_id: bigint,
+                source_status_id_str: string,
+                type: string,
+                url: string
+            >
+        >
+    >
+>
+"""
+
+ATHENA_CREATE_TWEEPY_VIDEO_ID = """
+CREATE EXTERNAL TABLE IF NOT EXISTS tweepy_video_id (
+{structure}
+)
+PARTITIONED BY (reference_date String)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+WITH SERDEPROPERTIES (
+  'serialization.format' = '1',
+  'ignore.malformed.json' = 'true'
+) LOCATION 's3://{s3_bucket}/tweepy_video_id/'
+TBLPROPERTIES ('has_encrypted_data'='false');
+"""
+
+ATHENA_CREATE_TWEEPY_SCREEN_NAME = """
+CREATE EXTERNAL TABLE IF NOT EXISTS tweepy_screen_name (
+{structure}
+)
+PARTITIONED BY (reference_date String)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+WITH SERDEPROPERTIES (
+  'serialization.format' = '1',
+  'ignore.malformed.json' = 'true'
+) LOCATION 's3://{s3_bucket}/tweepy_screen_name/'
+TBLPROPERTIES ('has_encrypted_data'='false');
+"""
+
+
 
 class TwitterSearch:
     def __init__(self, credentials, athena_data, s3_admin, s3_data):
@@ -180,7 +605,6 @@ class TwitterSearch:
             auth.set_access_token(key=self.credentials['access_token'],
                                   secret=self.credentials['access_token_secret'])
             api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
-
 
             database.execute(CREATE_TABLE_YOUTUBE_VIDEO_ID)
             database.execute(CREATE_TABLE_TWEET_FROM_VIDEO_ID)
@@ -257,7 +681,6 @@ class TwitterSearch:
         database = sqlite3.connect(str(database_file))
         database.row_factory = sqlite3.Row
         try:
-
             tweet_from_video_id = Path(Path(__file__).parent, 'tmp', 'tweet_from_video_id.sqlite')
             tweet_from_screen_name = Path(Path(__file__).parent, 'tmp', 'tweet_from_screen_name.sqlite')
 
@@ -343,12 +766,144 @@ class TwitterSearch:
         Path(new_videos_yesterday).parent.mkdir(parents=True, exist_ok=True)
         new_videos_yesterday_file = athena_db.query_athena_and_download(query_string=NEW_VIDEOS_YESTERDAY,
                                                                         filename=new_videos_yesterday)
+        yesterday = athena_db.query_athena_and_get_result(query_string=YESTERDAY)['yesterday']
+
         if method == 'twint':
             self.collect_user_tweets_twint(filter_terms=filter_terms,
                                            new_videos_yesterday_file=new_videos_yesterday_file)
+            self.export_twint(yesterday=yesterday)
         else:
             self.collect_user_tweets_tweepy(filter_terms=filter_terms,
                                             new_videos_yesterday_file=new_videos_yesterday_file)
+            self.export_tweepy(yesterday=yesterday)
+
+    def create_json_twint_file(self, source, destination):
+        source_db = sqlite3.connect(source)
+        source_db.row_factory = sqlite3.Row
+        cursor = source_db.cursor()
+        cursor.execute("select * from tweets order by id_str;")
+        with open(destination, 'w') as json_writer:
+            for tweet in cursor:
+                new_record = dict()
+                new_record['id'] = tweet['id']
+                new_record['id_str'] = tweet['id_str']
+                new_record['tweet'] = tweet['tweet']
+                new_record['conversation_id'] = tweet['conversation_id']
+                new_record['created_at'] = datetime.utcfromtimestamp(tweet['created_at']/1000).strftime('%Y-%m-%d %H:%M:%S')
+                new_record['date'] = tweet['date']
+                new_record['time'] = tweet['time']
+                new_record['timezone'] = tweet['timezone']
+                new_record['place'] = tweet['place']
+                new_record['replies_count'] = tweet['replies_count']
+                new_record['likes_count'] = tweet['likes_count']
+                new_record['retweets_count'] = tweet['retweets_count']
+                new_record['user_id'] = tweet['user_id']
+                new_record['user_id_str'] = tweet['user_id_str']
+                new_record['screen_name'] = tweet['screen_name']
+                new_record['name'] = tweet['name']
+                new_record['link'] = tweet['link']
+                new_record['mentions'] = tweet['mentions'].split(',') if tweet['mentions'] != '' else []
+                new_record['hashtags'] = tweet['hashtags'].split(',') if tweet['hashtags'] != '' else []
+                new_record['cashtags'] = tweet['cashtags'].split(',') if tweet['cashtags'] != '' else []
+                new_record['urls'] = tweet['urls'].split(',') if tweet['urls'] != '' else []
+                new_record['photos'] = tweet['photos'].split(',') if tweet['photos'] != '' else []
+                new_record['quote_url'] = tweet['quote_url']
+                new_record['video'] = tweet['video']
+                new_record['geo'] = tweet['geo']
+                new_record['near'] = tweet['near']
+                new_record['source'] = tweet['source']
+                new_record['time_update'] = datetime.utcfromtimestamp(tweet['time_update']/1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                json_line = json.dumps(new_record)
+                json_writer.write("{}\n".format(json_line))
+        source_db.close()
+
+    def export_twint(self, yesterday):
+        tweet_from_video_id = Path(Path(__file__).parent, 'tmp', 'twint', 'tweet_from_video_id.sqlite')
+        json_video_id_file = Path(Path(__file__).parent, 'tmp', 'twint_from_video_id.json')
+        self.create_json_twint_file(source=tweet_from_video_id, destination=json_video_id_file)
+        json_video_id_file_compressed = compress(json_video_id_file)
+        tweet_from_screen_name = Path(Path(__file__).parent, 'tmp', 'twint', 'tweet_from_screen_name.sqlite')
+        json_screen_name_file = Path(Path(__file__).parent, 'tmp', 'twint_from_screen_name.json')
+        self.create_json_twint_file(source=tweet_from_screen_name, destination=json_screen_name_file)
+        json_screen_name_file_compressed = compress(json_screen_name_file)
+
+        s3 = boto3.resource('s3')
+        s3_filename = "twint_video_id/reference_date={}/twint_from_video_id.json.bz2".format(yesterday)
+        s3.Bucket(self.s3_data).upload_file(str(json_video_id_file_compressed), s3_filename)
+
+        s3_filename = "twint_screen_name/reference_date={}/twint_from_screen_name.json.bz2".format(yesterday)
+        s3.Bucket(self.s3_data).upload_file(str(json_screen_name_file_compressed), s3_filename)
+
+        athena_db = AthenaDatabase(database=self.athena_data, s3_output=self.s3_admin)
+        athena_db.query_athena_and_wait(query_string="DROP TABLE twint_video_id")
+        athena_db.query_athena_and_wait(query_string=ATHENA_CREATE_TWINT_VIDEO_ID.format(structure=STRUCTURE_TWINT_ATHENA,
+                                                                                         s3_bucket=self.s3_data))
+        athena_db.query_athena_and_wait(query_string="MSCK REPAIR TABLE twint_video_id")
+
+        athena_db.query_athena_and_wait(query_string="DROP TABLE twint_screen_name")
+        athena_db.query_athena_and_wait(query_string=ATHENA_CREATE_TWINT_SCREEN_NAME.format(structure=STRUCTURE_TWINT_ATHENA,
+                                                                                            s3_bucket=self.s3_data))
+        athena_db.query_athena_and_wait(query_string="MSCK REPAIR TABLE twint_screen_name")
+
+    def __gen_dict_extract(self, key, var):
+        if hasattr(var, 'items'):
+            for k, v in var.items():
+                if k == key:
+                    yield v
+                if isinstance(v, dict):
+                    for result in self.__gen_dict_extract(key, v):
+                        yield result
+                elif isinstance(v, list):
+                    for d in v:
+                        for result in self.__gen_dict_extract(key, d):
+                            yield result
+
+    def create_json_tweepy_file(self, source, destination):
+        tweet_sqlite = Path(Path(__file__).parent, 'tmp', 'tweepy', 'twitter_search.sqlite')
+        source_db = sqlite3.connect(tweet_sqlite)
+        source_db.row_factory = sqlite3.Row
+        cursor = source_db.cursor()
+        cursor.execute("select tweet from {} order by id_str;".format(source))
+
+        with open(destination, 'w') as json_writer:
+            for tweet in cursor:
+                json_line = tweet['tweet']
+                tweet_json = json.loads(json_line)
+                for created_at in self.__gen_dict_extract('created_at', tweet_json):
+                    json_line = json_line.replace(created_at,
+                                                  datetime.strftime(datetime.strptime(created_at,
+                                                                                      '%a %b %d %H:%M:%S +0000 %Y'),
+                                                                    '%Y-%m-%d %H:%M:%S'),
+                                                  1)
+                json_writer.write("{}\n".format(json_line.strip("\r\n")))
+
+        source_db.close()
+
+    def export_tweepy(self, yesterday):
+        json_file = Path(Path(__file__).parent, 'tmp', 'tweepy_video_id.json')
+        self.create_json_tweepy_file(source="tweet_from_video_id", destination=json_file)
+        json_video_id_file_compressed = compress(json_file)
+        json_file = Path(Path(__file__).parent, 'tmp', 'tweepy_user_screen.json')
+        self.create_json_tweepy_file(source="tweet_from_screen_name", destination=json_file)
+        json_screen_name_file_compressed = compress(json_file)
+
+        s3 = boto3.resource('s3')
+        s3_filename = "tweepy_video_id/reference_date={}/tweepy_from_video_id.json.bz2".format(yesterday)
+        s3.Bucket(self.s3_data).upload_file(str(json_video_id_file_compressed), s3_filename)
+
+        s3_filename = "tweepy_screen_name/reference_date={}/tweepy_from_screen_name.json.bz2".format(yesterday)
+        s3.Bucket(self.s3_data).upload_file(str(json_screen_name_file_compressed), s3_filename)
+
+        athena_db = AthenaDatabase(database=self.athena_data, s3_output=self.s3_admin)
+        athena_db.query_athena_and_wait(query_string="DROP TABLE tweepy_video_id")
+        athena_db.query_athena_and_wait(query_string=ATHENA_CREATE_TWEEPY_VIDEO_ID.format(structure=STRUCTURE_TWEEPY_ATHENA,
+                                                                                          s3_bucket=self.s3_data))
+        athena_db.query_athena_and_wait(query_string="MSCK REPAIR TABLE tweepy_video_id")
+
+        athena_db.query_athena_and_wait(query_string="DROP TABLE tweepy_screen_name")
+        athena_db.query_athena_and_wait(query_string=ATHENA_CREATE_TWEEPY_SCREEN_NAME.format(structure=STRUCTURE_TWEEPY_ATHENA,
+                                                                                             s3_bucket=self.s3_data))
+        athena_db.query_athena_and_wait(query_string="MSCK REPAIR TABLE tweepy_screen_name")
 
 
 def main():
