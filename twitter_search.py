@@ -778,7 +778,7 @@ class TwitterSearch:
             self.export_tweepy(yesterday=yesterday)
 
     def create_json_twint_file(self, source, destination):
-        source_db = sqlite3.connect(source)
+        source_db = sqlite3.connect(str(source))
         source_db.row_factory = sqlite3.Row
         cursor = source_db.cursor()
         cursor.execute("select * from tweets order by id_str;")
@@ -860,7 +860,7 @@ class TwitterSearch:
 
     def create_json_tweepy_file(self, source, destination):
         tweet_sqlite = Path(Path(__file__).parent, 'tmp', 'tweepy', 'twitter_search.sqlite')
-        source_db = sqlite3.connect(tweet_sqlite)
+        source_db = sqlite3.connect(str(tweet_sqlite))
         source_db.row_factory = sqlite3.Row
         cursor = source_db.cursor()
         cursor.execute("select tweet from {} order by id_str;".format(source))
