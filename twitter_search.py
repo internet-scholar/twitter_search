@@ -770,11 +770,11 @@ class TwitterSearch:
 
         if method == 'twint':
             self.collect_user_tweets_twint(filter_terms=filter_terms,
-                                           new_videos_yesterday_file=new_videos_yesterday_file)
+                                          new_videos_yesterday_file=new_videos_yesterday_file)
             self.export_twint(yesterday=yesterday)
         else:
             self.collect_user_tweets_tweepy(filter_terms=filter_terms,
-                                            new_videos_yesterday_file=new_videos_yesterday_file)
+                                           new_videos_yesterday_file=new_videos_yesterday_file)
             self.export_tweepy(yesterday=yesterday)
 
     def create_json_twint_file(self, source, destination):
@@ -818,11 +818,11 @@ class TwitterSearch:
         source_db.close()
 
     def export_twint(self, yesterday):
-        tweet_from_video_id = Path(Path(__file__).parent, 'tmp', 'twint', 'tweet_from_video_id.sqlite')
+        tweet_from_video_id = Path(Path(__file__).parent, 'tmp', 'tweet_from_video_id.sqlite')
         json_video_id_file = Path(Path(__file__).parent, 'tmp', 'twint_from_video_id.json')
         self.create_json_twint_file(source=tweet_from_video_id, destination=json_video_id_file)
         json_video_id_file_compressed = compress(json_video_id_file)
-        tweet_from_screen_name = Path(Path(__file__).parent, 'tmp', 'twint', 'tweet_from_screen_name.sqlite')
+        tweet_from_screen_name = Path(Path(__file__).parent, 'tmp', 'tweet_from_screen_name.sqlite')
         json_screen_name_file = Path(Path(__file__).parent, 'tmp', 'twint_from_screen_name.json')
         self.create_json_twint_file(source=tweet_from_screen_name, destination=json_screen_name_file)
         json_screen_name_file_compressed = compress(json_screen_name_file)
@@ -859,7 +859,7 @@ class TwitterSearch:
                             yield result
 
     def create_json_tweepy_file(self, source, destination):
-        tweet_sqlite = Path(Path(__file__).parent, 'tmp', 'tweepy', 'twitter_search.sqlite')
+        tweet_sqlite = Path(Path(__file__).parent, 'tmp', 'twitter_search.sqlite')
         source_db = sqlite3.connect(str(tweet_sqlite))
         source_db.row_factory = sqlite3.Row
         cursor = source_db.cursor()
